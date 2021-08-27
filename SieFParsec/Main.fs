@@ -12,25 +12,13 @@ let writeLines filePath lines =
         
 [<EntryPoint>]
 let main _ =
-    let sieFile = readLines "C:\\sie\\sie.se"
-    
-    let input = "#VER \"24\" 3103708 20170102 \"Ankommande betalningar - 10100\" 20170102
-{
-    #TRANS 1204 {   } 9390.00 \"20170102\"  \"6794681\" 
-    #TRANS 1208 {   } -9390.00 \"20170102\"  \"6794681\" 
-}"
+    let sieFile = readLines "C:\\sie\\big_sie1.se"
     
     match SieParser.parseSie sieFile with
     | Right result ->
-        let parsed, unknown = TypeParsers.mapAll result
-        
-        match unknown with
-        | [] -> printfn "ALL TAGS ARE PARSED"
-        | _ ->  printfn $"THERE ARE SOME UNKNOWN TAGS: %A{unknown}"
-        
-        printfn "--------------------------"
-        printfn $"%d{parsed.Length}"
-        for p in parsed do printfn $"%A{p}"
+        match TypeParsers.document result with
+        | Some document -> printfn $"%A{document.BadRecords}"
+        | None -> printfn "Failed to parse!"
         
     | Left error-> printfn $"%s{error}"
     0

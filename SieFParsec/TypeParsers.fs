@@ -6,23 +6,29 @@ open FParsecPlayground.Helpers
 open FParsecPlayground.Tags
 
 let ignoreTags tags sie =
-    match tags |> List.contains sie.Tag with
-    | true -> Some Ignored
+    match sie with
+    | Base sieBase -> 
+        match tags |> List.contains sieBase.Tag with
+        | true -> Some Ignored
+        | _ -> None
     | _ -> None
     
 let ignoreContent tags sie =
-    match tags |> List.contains sie.Tag with
-    | true -> Some IgnoredContent
-    | false -> None
+    match sie with
+    | Base sieBase -> 
+        match  tags |> List.contains sieBase.Tag with
+        | true -> Some IgnoredContent
+        | false -> None
+    | _ -> None
 
 let companyID = function
-    | { Tag = ORGNR; Values = values }
-        -> values |> plainValues |> headOrNone |> map Orgnr
+    | Base { Tag = ORGNR; Values = values }
+        -> values |> plainValues |> headOrNone |> map Orgnr |> map Sie
     | _ -> None
     
 let companyName = function
-    | { Tag = FNAMN; Values = values }
-        -> values |> plainValues |> headOrNone |> map Fnamn
+    | Base { Tag = FNAMN; Values = values }
+        -> values |> plainValues |> headOrNone |> map Fnamn |> map Sie
     | _ -> None
     
 let createTransaction (values : SieValue list) =
@@ -52,11 +58,11 @@ let createTransaction (values : SieValue list) =
     | _ -> None
     
 let transaction = function
-    | { Tag = TRANS; Values = values; }
-        -> createTransaction values |> map Trans
+    | Base { Tag = TRANS; Values = values; }
+        -> createTransaction values |> map Trans |> map Info
     | _ -> None
     
-let createVerification values transactions =
+let createVerification values transactions : Verification option =
     match values |> plainValues with
     | serie
       :: version
@@ -72,22 +78,23 @@ let createVerification values transactions =
       }
     | _ -> None
 
-let mapVoucherContent (transactions : SieBase list) =
+let mapVoucherContent (transactions : SieRecord list) =
     transactions
     |> map (transaction <|> ignoreContent [RTRANS; BTRANS] <|>% UnknownContent)
     |> filter (not << isIgnoredContent)
 
 let voucher = function
-    | { Tag = VER; Values = values; Children = children }
+    | Base { Tag = VER; Values = values; Children = children }
         -> mapVoucherContent children
         |> createVerification values
         |> map Ver
+        |> map Sie
     | _ -> None
     
 let account = function
-    | { Tag = KONTO; Values = values }
+    | Base { Tag = KONTO; Values = values }
      -> match values |> plainValues with
-        | account::name::_ -> Some <| Konto { Code = account; Name = name }
+        | account::name::_ -> Some <| Konto { Code = account; Name = name } |> map Sie
         | _ -> None
     | _ -> None
     
@@ -100,28 +107,28 @@ let createBalance (values : SieValue list) =
         | _ -> None
     
 let openingBalance = function
-    | { Tag = IB; Values = values } -> createBalance values |> map Ib
+    | Base { Tag = IB; Values = values } -> createBalance values |> map Ib |> map Sie
     | _ -> None
     
 let closingBalance = function
-    | { Tag = UB; Values = values } -> createBalance values |> map Ub
+    | Base { Tag = UB; Values = values } -> createBalance values |> map Ub |> map Sie
     | _ -> None
     
 let resultAccount = function
-    | { Tag = RES; Values = values } -> createBalance values |> map Res
+    | Base { Tag = RES; Values = values } -> createBalance values |> map Res |> map Sie
     | _ -> None
     
 let financialYear = function
-    | { Tag = RAR; Values = values }
+    | Base { Tag = RAR; Values = values }
      -> match values |> plainValues with
         | TryInt year
           ::TryDate start
           ::TryDate finish
-          ::_ -> Some <| Rar { YearIndex = year; Start = start; End = finish }
+          ::_ -> Some <| Rar { YearIndex = year; Start = start; End = finish } |> map Sie
         | _ -> None
     | _ -> None
     
-let uselessTags = allTags |> except [ VER; KONTO; IB; UB; RES; ORGNR; FNAMN; RAR ]
+let uselessTags = allTags |> except [ VER; KONTO; IB; UB; RES; ORGNR; FNAMN; RAR; TRANS; BTRANS; RTRANS ]
     
 let all = [
     voucher
@@ -135,8 +142,32 @@ let all = [
     ignoreTags uselessTags
 ]
 
+let folder builder (entity : SieEntity) =
+    match entity with
+    | Orgnr no -> builder |> withNo no
+    | Fnamn name -> builder |> withName name
+    | Ver v -> builder |> withVoucher v
+    | Konto v -> builder |> withAccount v
+    | Ib v -> builder |> withIngoing v
+    | Ub v -> builder |> withOutgoing v
+    | Rar year -> match year with
+                  | { YearIndex = 0 } -> builder |> withPeriod year
+                  | _ -> builder
+    | Res v -> builder |> withRes v
+    
 let mapAll (sie : SieBase list) =
     sie
     |> map (choose all <|>% Unknown)
     |> filter (not << isIgnored)
     |> List.partition (function | Unknown _ -> false | _ -> true)
+    
+let document sie =
+    sie
+    |> map (choose all <|>% Unknown)
+    |> List.fold (fun builder value ->
+                    match value with
+                    | Sie sie -> folder builder sie
+                    | Unknown unknown -> builder |> withBadRecord unknown
+                    | Ignored _ -> builder)
+                createDocumentBuilder
+    |> build

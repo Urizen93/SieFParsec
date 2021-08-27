@@ -2,6 +2,7 @@
 
 open System
 open FParsec
+open FParsec.Pipes
 open FSharpPlus.Internals
 
 [<AutoOpen>]
@@ -22,20 +23,24 @@ module Types =
         values
         |> List.choose sieValue
         
-    type SieBase = {
+    type SieRecord =
+        | Base of SieBase
+        | NonParsed of string
+        
+    and SieBase = {
         Tag : string
         Values : SieValue list
-        Children : SieBase list
+        Children : SieRecord list
     }
 
 [<AutoOpen>]
 module Chars =
-    let doubleQuote = pchar '"'
-    let curlyOpen = skipChar '{'
-    let curlyClose = skipChar '}'
+    let doubleQuote = %'"'
+    let curlyOpen = %'{'
+    let curlyClose = %'}'
     let hashtag = skipChar '#'
     let escapedDoubleQuote =
-        skipChar '\\' >>. doubleQuote
+        %'\\' >>. doubleQuote
     let nonSpace = satisfy (not << Char.IsWhiteSpace)
     let lineSpace = satisfy (fun x -> Char.IsWhiteSpace(x) && (x <> '\n'))
     let lineSpaces = skipMany lineSpace
@@ -51,37 +56,49 @@ let quotedString =
     |> manyCharsBetween2 doubleQuote
 let tag = hashtag >>. value
 let listOfObjects =
-    lineSpaces >>. (quotedString <|> value) .>> lineSpaces
-    |> manyBetween curlyOpen curlyClose
+    (quotedString <|> value) .>> lineSpaces
+    |> manyBetween (curlyOpen .>> lineSpaces) curlyClose
     
-let sieValues =
-    choice [
-        (listOfObjects |>> ObjectList)
-        (quotedString |>> Value)
-        (value |>> Value)
-    ]
+let sieValue = %[
+    (listOfObjects |>> ObjectList)
+    (quotedString |>> Value)
+    (value |>> Value)]
     
-let sieEntity, sieEntityRef = createParserForwardedToRef()
+let sieBase, sieBaseRef = createParserForwardedToRef()
+
+let skipTillNonSpace =
+    spaces >>. (lookAhead nonSpace |>> ignore <|> eof)
+    
+let trim (str : string) =
+    str.Trim()
+    
+let nonParsed =
+    many1CharsTill anyChar (lookAhead hashtag <|> eof)
+    |>> trim
+
+let sieRecord = %[
+    attempt sieBase |>> Base
+    nonParsed |>> NonParsed]
 
 let children =
-    sieEntity
-    |> manyBetween (spaces >>. curlyOpen .>> spaces) (curlyClose .>> spaces)
+    (sieRecord .>> skipTillNonSpace)
+    |> manyBetween (spaces >>. curlyOpen .>> spaces) curlyClose
     
-do sieEntityRef :=
+do sieBaseRef :=
     parse {
-        let! tag = tag |> between spaces lineSpaces
+        let! tag = tag
         
         let! values =
-            (sieValues .>> lineSpaces)
-            |> manyBetween lineSpaces (lineSpaces >>. eol)
+            (sieValue .>> lineSpaces)
+            |> manyBetween lineSpaces eol
         
         let! children = (attempt children) <|>% list.Empty
         
         return { Tag = tag; Values = values; Children = children }
     }
-    
+
 let sieParser =
-    many sieEntity
+    sepEndBy sieRecord skipTillNonSpace
 
 let parseSie input =
     match run sieParser input with
