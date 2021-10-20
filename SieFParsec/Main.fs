@@ -1,24 +1,22 @@
 ﻿module FParsecPlayground.Main
 
+open System.IO
+open System.Text
 open FSharpPlus.Internals
+open FSharpPlus
 
-let encoding = System.Text.CodePagesEncodingProvider.Instance.GetEncoding(437)
-
-let readLines filePath =
-    System.IO.File.ReadAllText(filePath, encoding)
+let readStream filePath =
+    File.OpenRead(filePath)
     
 let writeLines filePath lines =
-    System.IO.File.WriteAllLines(filePath, lines)
+    File.WriteAllLines(filePath, lines)
         
 [<EntryPoint>]
 let main _ =
-    let sieFile = readLines "C:\\sie\\big_sie1.se"
+    let sieFile = readStream "C:\\sie\\big_sie1.se"
     
-    match SieParser.parseSie sieFile with
+    match SieParser.parseSie sieFile (CodePagesEncodingProvider.Instance.GetEncoding 437) with
     | Right result ->
-        match TypeParsers.document result with
-        | Some document -> printfn $"%A{document.BadRecords}"
-        | None -> printfn "Failed to parse!"
-        
+        printfn $"%A{(TypeParsers.document result |> Option.map (fun (document : SieDocument) -> document.BadRecords))}"
     | Left error-> printfn $"%s{error}"
     0

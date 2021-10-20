@@ -155,12 +155,6 @@ let folder builder (entity : SieEntity) =
                   | _ -> builder
     | Res v -> builder |> withRes v
     
-let mapAll (sie : SieBase list) =
-    sie
-    |> map (choose all <|>% Unknown)
-    |> filter (not << isIgnored)
-    |> List.partition (function | Unknown _ -> false | _ -> true)
-    
 let document sie =
     sie
     |> map (choose all <|>% Unknown)

@@ -36,6 +36,13 @@ type Voucher = {
     Transactions : TransactionInfo list
 }
 
+let createVoucher (verification : Verification) transactions = {
+    Serie = verification.Serie
+    Version = verification.Version
+    Date = verification.Date
+    Text = verification.Text
+    Transactions = transactions }
+
 type Account = {
     Code : string
     Name : string
@@ -76,22 +83,17 @@ let isIgnored = function
     | Ignored -> true
     | _ -> false
     
-let createVoucher (value : Verification) =
-    let transactions, badTransactions =
-        value.Transactions
-        |> List.filter (not << isIgnoredContent)
-        |> List.partitionMap (function
-        | Info x -> Choice1Of2 x
-        | UnknownContent x -> Choice2Of2 x
-        | IgnoredContent _ -> raise <| Exception "Ignored values should be filtered out by now!")
-    ({Serie = value.Serie
-      Version = value.Version
-      Date = value.Date
-      Text = value.Text
-      Transactions = transactions},
-      badTransactions)
+let fromVerification (value : Verification) =
+    value.Transactions
+    |> List.choose (function
+        | Info x -> Some <| Choice1Of2 x
+        | UnknownContent x -> Some <| Choice2Of2 x
+        | IgnoredContent _ -> None)
+    |> List.partitionMap id
+    |> mapItem1 (createVoucher value)
     
 type SieDocument = {
+    Type : string option
     No : string
     Name : string
     Period : FinancialYear
@@ -104,21 +106,22 @@ type SieDocument = {
 }
 
 type SieDocumentBuilder = {
+    mutable Type : string option
     mutable No : string option
     mutable Name : string option
     mutable Period : FinancialYear option
-    mutable Accounts : Account seq
-    mutable Ingoing : Balance seq
-    mutable Outgoing : Balance seq
-    mutable Res : Balance seq
-    mutable Vouchers : Voucher seq
-    mutable BadRecords : SieRecord seq
+    mutable Accounts : Account list
+    mutable Ingoing : Balance list
+    mutable Outgoing : Balance list
+    mutable Res : Balance list
+    mutable Vouchers : Voucher list
+    mutable BadRecords : SieRecord list
 }
 
 let createDocumentBuilder : SieDocumentBuilder =
-    { No = None; Name = None; Period = None
-      Accounts = Seq.empty; Ingoing = Seq.empty; Outgoing = Seq.empty
-      Res = Seq.empty; Vouchers = Seq.empty; BadRecords = Seq.empty; }
+    { Type = None; No = None; Name = None; Period = None
+      Accounts = List.empty; Ingoing = List.empty; Outgoing = List.empty
+      Res = List.empty; Vouchers = List.empty; BadRecords = List.empty; }
 
 let withNo value builder =
     match builder.No with
@@ -141,36 +144,33 @@ let withPeriod value builder =
     | None -> builder.Period <- Some value
     builder
     
-let (+) a b =
-    Seq.append a <| Seq.singleton b
-    
 let withAccount value builder =
-    builder.Accounts <- builder.Accounts + value
+    builder.Accounts <- value :: builder.Accounts
     builder
     
 let withIngoing value builder =
-    builder.Ingoing <- builder.Ingoing + value
+    builder.Ingoing <- value :: builder.Ingoing
     builder
     
 let withOutgoing value builder =
-    builder.Outgoing <- builder.Outgoing + value
+    builder.Outgoing <- value :: builder.Outgoing
     builder
     
 let withRes value builder =
-    builder.Res <- builder.Res + value
+    builder.Res <- value :: builder.Res
     builder
     
-let withBadRecord value builder =
-    builder.BadRecords <- builder.BadRecords + value
+let withBadRecord (value : SieRecord) builder =
+    builder.BadRecords <- value :: builder.BadRecords
     builder
     
 let withBadRecords values builder =
-    builder.BadRecords <- Seq.append builder.BadRecords values
-    builder
+    builder.BadRecords <- List.append values builder.BadRecords
+    builder 
     
 let withVoucher value builder =
-    let voucher, badTransactions = createVoucher value
-    builder.Vouchers <- builder.Vouchers + voucher
+    let voucher, badTransactions = fromVerification value
+    builder.Vouchers <- voucher :: builder.Vouchers 
     builder |> withBadRecords badTransactions
     
 let build builder : SieDocument option =
@@ -179,13 +179,14 @@ let build builder : SieDocument option =
         let name = builder.Name |> Option.defaultValue no
         let! period = builder.Period
         
-        return { No = no
+        return { Type = builder.Type
+                 No = no
                  Name = name
                  Period = period
-                 Accounts = builder.Accounts |> List.ofSeq
-                 Ingoing = builder.Ingoing |> List.ofSeq
-                 Outgoing = builder.Outgoing |> List.ofSeq
-                 Res = builder.Res |> List.ofSeq
-                 Vouchers = builder.Vouchers |> List.ofSeq
-                 BadRecords = builder.BadRecords |> List.ofSeq }
+                 Accounts = builder.Accounts |> List.rev
+                 Ingoing = builder.Ingoing |> List.rev
+                 Outgoing = builder.Outgoing |> List.rev
+                 Res = builder.Res |> List.rev
+                 Vouchers = builder.Vouchers |> List.rev
+                 BadRecords = builder.BadRecords |> List.rev }
     }

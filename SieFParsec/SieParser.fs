@@ -1,6 +1,7 @@
 ﻿module FParsecPlayground.SieParser
 
 open System
+open System.IO
 open FParsec
 open FParsec.Pipes
 open FSharpPlus.Internals
@@ -19,9 +20,7 @@ module Types =
         | ObjectList list -> Some list
         | _ -> None
         
-    let plainValues (values : SieValue list) =
-        values
-        |> List.choose sieValue
+    let plainValues = List.choose sieValue
         
     type SieRecord =
         | Base of SieBase
@@ -100,7 +99,7 @@ do sieBaseRef :=
 let sieParser =
     sepEndBy sieRecord skipTillNonSpace
 
-let parseSie input =
-    match run sieParser input with
+let parseSie (input : Stream) encoding =
+    match runParserOnStream sieParser () "" input encoding with
     | Success(result, _, _) -> Right result
     | Failure(error, _, _) -> Left error

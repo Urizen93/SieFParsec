@@ -23,9 +23,6 @@ let choose options =
     options
     |> List.reduce (<|>)
     
-let chooseOr options coalesce =
-    options |> choose <|>% coalesce
-
 let (|TryInt|_|) (str : string) =
     match Int32.TryParse(str) with
     | true, value -> Some value

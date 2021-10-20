@@ -11,6 +11,7 @@
       <Compile Include="Tags.fs" />
       <Compile Include="Types.fs" />
       <Compile Include="TypeParsers.fs" />
+      <Compile Include="SieEncoding.fs" />
       <Compile Include="Main.fs" />
     </ItemGroup>
 
