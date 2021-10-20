@@ -60,6 +60,17 @@ type FinancialYear = {
     End : Date
 }
 
+type Company = {
+    ID : string
+    Name : string
+}
+
+let createCompany id name : Company option = monad {
+    let! id = id
+    let name = name |> Option.defaultValue id
+    return { ID = id; Name = name }
+}
+
 type SieEntity =
     | Orgnr of string
     | Fnamn of string
@@ -94,8 +105,7 @@ let fromVerification (value : Verification) =
     
 type SieDocument = {
     Type : string option
-    No : string
-    Name : string
+    Company : Company
     Period : FinancialYear
     Accounts : Account list
     Ingoing : Balance list
@@ -173,20 +183,17 @@ let withVoucher value builder =
     builder.Vouchers <- voucher :: builder.Vouchers 
     builder |> withBadRecords badTransactions
     
-let build builder : SieDocument option =
-    monad {
-        let! no = builder.No
-        let name = builder.Name |> Option.defaultValue no
-        let! period = builder.Period
-        
-        return { Type = builder.Type
-                 No = no
-                 Name = name
-                 Period = period
-                 Accounts = builder.Accounts |> List.rev
-                 Ingoing = builder.Ingoing |> List.rev
-                 Outgoing = builder.Outgoing |> List.rev
-                 Res = builder.Res |> List.rev
-                 Vouchers = builder.Vouchers |> List.rev
-                 BadRecords = builder.BadRecords |> List.rev }
-    }
+let build builder : SieDocument option = monad {
+    let! company = createCompany builder.No builder.Name
+    let! period = builder.Period
+    
+    return { Type = builder.Type
+             Company = company
+             Period = period
+             Accounts = builder.Accounts |> List.rev
+             Ingoing = builder.Ingoing |> List.rev
+             Outgoing = builder.Outgoing |> List.rev
+             Res = builder.Res |> List.rev
+             Vouchers = builder.Vouchers |> List.rev
+             BadRecords = builder.BadRecords |> List.rev }
+}
