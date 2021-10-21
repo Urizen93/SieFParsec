@@ -5,22 +5,6 @@ open FSharpPlus
 open FParsecPlayground.Helpers
 open FParsecPlayground.Tags
 
-let ignoreTags tags sie =
-    match sie with
-    | Base sieBase -> 
-        match tags |> List.contains sieBase.Tag with
-        | true -> Some Ignored
-        | _ -> None
-    | _ -> None
-    
-let ignoreContent tags sie =
-    match sie with
-    | Base sieBase -> 
-        match  tags |> List.contains sieBase.Tag with
-        | true -> Some IgnoredContent
-        | false -> None
-    | _ -> None
-
 let companyID = function
     | Base { Tag = ORGNR; Values = values }
         -> values |> plainValues |> headOrNone |> map Orgnr |> map Sie
@@ -31,7 +15,7 @@ let companyName = function
         -> values |> plainValues |> headOrNone |> map Fnamn |> map Sie
     | _ -> None
     
-let createTransaction (values : SieValue list) =
+let private createTransaction (values : SieValue list) =
     match values |> plainValues with
     | account
       :: TryDecimal balance
@@ -62,7 +46,7 @@ let transaction = function
         -> createTransaction values |> map Trans |> map Info
     | _ -> None
     
-let createVerification values transactions : Verification option =
+let private createVerification values transactions : Verification option =
     match values |> plainValues with
     | serie
       :: version
@@ -76,6 +60,14 @@ let createVerification values transactions : Verification option =
           Text = text
           Transactions = transactions
       }
+    | _ -> None
+
+let ignoreContent tags sie =
+    match sie with
+    | Base sieBase -> 
+        match  tags |> List.contains sieBase.Tag with
+        | true -> Some IgnoredContent
+        | false -> None
     | _ -> None
 
 let mapVoucherContent (transactions : SieRecord list) =
@@ -98,7 +90,7 @@ let account = function
         | _ -> None
     | _ -> None
     
-let createBalance (values : SieValue list) =
+let private createBalance (values : SieValue list) =
     match values |> plainValues with
         | TryInt year
           ::account
@@ -130,6 +122,14 @@ let financialYear = function
     
 let uselessTags = allTags |> except [ VER; KONTO; IB; UB; RES; ORGNR; FNAMN; RAR; TRANS; BTRANS; RTRANS ]
     
+let ignoreTags tags sie =
+    match sie with
+    | Base sieBase -> 
+        match tags |> List.contains sieBase.Tag with
+        | true -> Some Ignored
+        | _ -> None
+    | _ -> None
+    
 let all = [
     voucher
     account
@@ -142,26 +142,10 @@ let all = [
     ignoreTags uselessTags
 ]
 
-let folder builder (entity : SieEntity) =
-    match entity with
-    | Orgnr no -> builder |> withNo no
-    | Fnamn name -> builder |> withName name
-    | Ver v -> builder |> withVoucher v
-    | Konto v -> builder |> withAccount v
-    | Ib v -> builder |> withIngoing v
-    | Ub v -> builder |> withOutgoing v
-    | Rar year -> match year with
-                  | { YearIndex = 0 } -> builder |> withPeriod year
-                  | _ -> builder
-    | Res v -> builder |> withRes v
-    
+open SieDocumentBuilder
+
 let document sie =
     sie
     |> map (choose all <|>% Unknown)
-    |> List.fold (fun builder value ->
-                    match value with
-                    | Sie sie -> folder builder sie
-                    | Unknown unknown -> builder |> withBadRecord unknown
-                    | Ignored _ -> builder)
-                createDocumentBuilder
+    |> List.fold consume create
     |> build

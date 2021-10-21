@@ -4,6 +4,7 @@ module FParsecPlayground.Types
 open System
 open FParsecPlayground.SieParser.Types
 open FSharpPlus
+open FSharpPlus.Data
 
 type Transaction = {
     Account : string
@@ -36,7 +37,7 @@ type Voucher = {
     Transactions : TransactionInfo list
 }
 
-let createVoucher (verification : Verification) transactions = {
+let private createVoucher (verification : Verification) transactions = {
     Serie = verification.Serie
     Version = verification.Version
     Date = verification.Date
@@ -113,87 +114,4 @@ type SieDocument = {
     Res : Balance list
     Vouchers : Voucher list
     BadRecords : SieRecord list
-}
-
-type SieDocumentBuilder = {
-    mutable Type : string option
-    mutable No : string option
-    mutable Name : string option
-    mutable Period : FinancialYear option
-    mutable Accounts : Account list
-    mutable Ingoing : Balance list
-    mutable Outgoing : Balance list
-    mutable Res : Balance list
-    mutable Vouchers : Voucher list
-    mutable BadRecords : SieRecord list
-}
-
-let createDocumentBuilder : SieDocumentBuilder =
-    { Type = None; No = None; Name = None; Period = None
-      Accounts = List.empty; Ingoing = List.empty; Outgoing = List.empty
-      Res = List.empty; Vouchers = List.empty; BadRecords = List.empty; }
-
-let withNo value builder =
-    match builder.No with
-    | Some existing when existing = value -> ()
-    | Some existing -> raise <| Exception $"Found %s{value}, but there already is %s{existing}"
-    | None -> builder.No <- Some value
-    builder
-    
-let withName value builder =
-    match builder.Name with
-    | Some existing when existing = value -> ()
-    | Some existing -> raise <| Exception $"Found %s{value}, but there already is %s{existing}"
-    | None -> builder.Name <- Some value
-    builder
-    
-let withPeriod value builder =
-    match builder.Period with
-    | Some existing when existing = value -> ()
-    | Some existing -> raise <| Exception $"Found %A{value}, but there already is %A{existing}"
-    | None -> builder.Period <- Some value
-    builder
-    
-let withAccount value builder =
-    builder.Accounts <- value :: builder.Accounts
-    builder
-    
-let withIngoing value builder =
-    builder.Ingoing <- value :: builder.Ingoing
-    builder
-    
-let withOutgoing value builder =
-    builder.Outgoing <- value :: builder.Outgoing
-    builder
-    
-let withRes value builder =
-    builder.Res <- value :: builder.Res
-    builder
-    
-let withBadRecord (value : SieRecord) builder =
-    builder.BadRecords <- value :: builder.BadRecords
-    builder
-    
-let withBadRecords values builder =
-    builder.BadRecords <- List.append values builder.BadRecords
-    builder 
-    
-let withVoucher value builder =
-    let voucher, badTransactions = fromVerification value
-    builder.Vouchers <- voucher :: builder.Vouchers 
-    builder |> withBadRecords badTransactions
-    
-let build builder : SieDocument option = monad {
-    let! company = createCompany builder.No builder.Name
-    let! period = builder.Period
-    
-    return { Type = builder.Type
-             Company = company
-             Period = period
-             Accounts = builder.Accounts |> List.rev
-             Ingoing = builder.Ingoing |> List.rev
-             Outgoing = builder.Outgoing |> List.rev
-             Res = builder.Res |> List.rev
-             Vouchers = builder.Vouchers |> List.rev
-             BadRecords = builder.BadRecords |> List.rev }
 }

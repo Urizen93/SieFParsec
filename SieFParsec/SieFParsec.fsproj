@@ -10,6 +10,7 @@
       <Compile Include="SieParser.fs" />
       <Compile Include="Tags.fs" />
       <Compile Include="Types.fs" />
+      <Compile Include="SieDocumentBuilder.fs" />
       <Compile Include="TypeParsers.fs" />
       <Compile Include="SieEncoding.fs" />
       <Compile Include="Main.fs" />
