@@ -22,7 +22,7 @@ type SieDocumentBuilder = {
 [<AutoOpen>]
 module private Mutators =
     let withType value builder =
-        builder.Type <- value
+        builder.Type <- Some value
 
     let withNo value builder =
         match builder.No with
@@ -68,8 +68,6 @@ module private Mutators =
         
     let addEntity (entity : SieEntity) builder =
         match entity with
-        | Orgnr no -> builder |> withNo no
-        | Fnamn name -> builder |> withName name
         | Ver v -> builder |> withVoucher v
         | Konto v -> builder |> withAccount v
         | Ib v -> builder |> withIngoing v
@@ -78,6 +76,9 @@ module private Mutators =
                       | { YearIndex = 0 } -> builder |> withPeriod year
                       | _ -> ()
         | Res v -> builder |> withRes v
+        | Orgnr no -> builder |> withNo no
+        | Fnamn name -> builder |> withName name
+        | SieTyp sieType -> builder |> withType sieType
         builder
         
     let handleEntity value =

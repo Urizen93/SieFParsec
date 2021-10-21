@@ -15,6 +15,11 @@ let companyName = function
         -> values |> plainValues |> headOrNone |> map Fnamn |> map Sie
     | _ -> None
     
+let sieType = function
+    | Base { Tag = SIETYP; Values = values }
+        -> values |> plainValues |> headOrNone |> map SieTyp |> map Sie
+    | _ -> None
+    
 let private createTransaction (values : SieValue list) =
     match values |> plainValues with
     | account
@@ -120,7 +125,7 @@ let financialYear = function
         | _ -> None
     | _ -> None
     
-let uselessTags = allTags |> except [ VER; KONTO; IB; UB; RES; ORGNR; FNAMN; RAR; TRANS; BTRANS; RTRANS ]
+let uselessTags = allTags |> except [ VER; KONTO; IB; UB; RES; ORGNR; FNAMN; RAR; TRANS; BTRANS; RTRANS; SIETYP ]
     
 let ignoreTags tags sie =
     match sie with
@@ -139,6 +144,7 @@ let all = [
     companyID
     companyName
     financialYear
+    sieType
     ignoreTags uselessTags
 ]
 

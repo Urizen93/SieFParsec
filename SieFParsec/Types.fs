@@ -73,6 +73,7 @@ let createCompany id name : Company option = monad {
 }
 
 type SieEntity =
+    | SieTyp of string
     | Orgnr of string
     | Fnamn of string
     | Ver of Verification
