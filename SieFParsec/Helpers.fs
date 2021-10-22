@@ -2,6 +2,7 @@
 
 open System
 open System.Globalization
+open FSharpPlus
 
 let headOrNone = function
     | head::_ -> Some head
@@ -23,22 +24,20 @@ let choose options =
     options
     |> List.reduce (<|>)
     
-let (|TryInt|_|) (str : string) =
+let (|Int|_|) (str : string) =
     match Int32.TryParse(str) with
     | true, value -> Some value
     | _ -> None
         
-let (|TryDecimal|_|) (str : string) =
+let (|InvariantDecimal|_|) (str : string) =
     match Decimal.TryParse(str, NumberStyles.Number, CultureInfo.InvariantCulture) with
     | true, value -> Some value
     | _ -> None
     
-let (|TryDate|_|) (str : string) =
+let (|CompactDate|_|) (str : string) =
     match Date.TryParseExact(str, "yyyyMMdd", null, DateTimeStyles.None) with
     | true, value -> Some value
     | _ -> None
-    
-open FSharpPlus
     
 let except exclude (source : 'a list) =
     source

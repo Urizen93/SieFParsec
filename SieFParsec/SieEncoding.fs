@@ -3,6 +3,7 @@
 open System.IO
 open System.Text
 open System.Text.RegularExpressions
+open FSharpx.Option
 
 let private defaultEncoding = CodePagesEncodingProvider.Instance.GetEncoding 437
 
@@ -30,7 +31,7 @@ let guess reader =
     |> Seq.unfold guessByLines
     |> Seq.choose id
     |> Seq.tryHead
-    |> Option.defaultValue defaultEncoding
+    |> getOrElse defaultEncoding
     
 let guessFromStream (stream : Stream) =
-    guess |> using (new StreamReader(stream, defaultEncoding))
+    guess |> using (new StreamReader(stream, defaultEncoding, true, -1, true))

@@ -4,6 +4,7 @@ open System
 open FParsecPlayground
 open FParsecPlayground.SieParser
 open FSharpPlus
+open FSharpx.Choice
 
 //this one is mutable in order to reduce GC pressure
 type SieDocumentBuilder = {
@@ -18,6 +19,10 @@ type SieDocumentBuilder = {
     mutable Vouchers : Voucher list
     mutable BadRecords : SieRecord list
 }
+
+type DocumentBuildFailed =
+    | CompanyIDIsMissing
+    | PeriodIsMissing
 
 [<AutoOpen>]
 module private Mutators =
@@ -90,10 +95,17 @@ module private Mutators =
 let consume builder value =
     builder |> handleEntity value
     
-let build builder = monad {
-    let! company = createCompany builder.No builder.Name
-    let! period = builder.Period
+let create () =
+    { Type = None; No = None; Name = None; Period = None
+      Accounts = List.empty; Ingoing = List.empty; Outgoing = List.empty
+      Res = List.empty; Vouchers = List.empty; BadRecords = List.empty; }
     
+let build builder = choose {
+    let! company = createCompany builder.No builder.Name
+                   |> ofOption CompanyIDIsMissing
+    let! period = builder.Period
+                  |> ofOption PeriodIsMissing
+                  
     return { Type = builder.Type
              Company = company
              Period = period
@@ -104,8 +116,3 @@ let build builder = monad {
              Vouchers = builder.Vouchers |> List.rev
              BadRecords = builder.BadRecords |> List.rev }
 }
-
-let create =
-    { Type = None; No = None; Name = None; Period = None
-      Accounts = List.empty; Ingoing = List.empty; Outgoing = List.empty
-      Res = List.empty; Vouchers = List.empty; BadRecords = List.empty; }

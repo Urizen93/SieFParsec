@@ -6,71 +6,49 @@ open FParsecPlayground.Helpers
 open FParsecPlayground.Tags
 
 let companyID = function
-    | Base { Tag = ORGNR; Values = values }
-        -> values |> plainValues |> headOrNone |> map Orgnr |> map Sie
+    | Base { Tag = ORGNR; Values = values } -> values |> plainValues |> headOrNone |> map (Orgnr >> Sie)
     | _ -> None
     
 let companyName = function
-    | Base { Tag = FNAMN; Values = values }
-        -> values |> plainValues |> headOrNone |> map Fnamn |> map Sie
+    | Base { Tag = FNAMN; Values = values } -> values |> plainValues |> headOrNone |> map (Fnamn >> Sie)
     | _ -> None
     
 let sieType = function
-    | Base { Tag = SIETYP; Values = values }
-        -> values |> plainValues |> headOrNone |> map SieTyp |> map Sie
+    | Base { Tag = SIETYP; Values = values } -> values |> plainValues |> headOrNone |> map (SieTyp >> Sie)
     | _ -> None
     
 let private createTransaction (values : SieValue list) =
     match values |> plainValues with
-    | account
-      :: TryDecimal balance
-      :: TryDate date
-      :: description
-      :: _
-       -> Some {
-            Account = account
-            Balance = balance
-            Date = Some date
-            Description = description
-       }
-    | account
-      :: TryDecimal balance
-      :: _
-      :: description
-      :: _
-       -> Some {
-            Account = account
-            Balance = balance
-            Date = None
-            Description = description
-       }
+    | account::InvariantDecimal balance::CompactDate date::description::_ ->
+        Some { Account = account; Balance = balance; Date = Some date; Description = description }
+        
+    | account::InvariantDecimal balance::_::description::_ ->
+        Some { Account = account; Balance = balance; Date = None; Description = description }
+        
+    | account::InvariantDecimal balance::_ ->
+        Some { Account = account; Balance = balance; Date = None; Description = "" }
+        
     | _ -> None
     
 let transaction = function
-    | Base { Tag = TRANS; Values = values; }
-        -> createTransaction values |> map Trans |> map Info
+    | Base { Tag = TRANS; Values = values; } ->
+        createTransaction values |> map (Trans >> Info)
     | _ -> None
     
 let private createVerification values transactions : Verification option =
     match values |> plainValues with
-    | serie
-      :: version
-      :: TryDate date
-      :: text
-      :: _
-      -> Some {
-          Serie = serie
-          Version = version
-          Date = date
-          Text = text
-          Transactions = transactions
-      }
+    | serie::version::CompactDate date::text::_ ->
+        Some { Serie = serie; Version = version; Date = date; Text = text; Transactions = transactions }
+        
+    | serie::version::_::CompactDate date::text::_ ->
+        Some { Serie = serie; Version = version; Date = date; Text = text; Transactions = transactions }
+        
     | _ -> None
 
 let ignoreContent tags sie =
     match sie with
     | Base sieBase -> 
-        match  tags |> List.contains sieBase.Tag with
+        match tags |> List.contains sieBase.Tag with
         | true -> Some IgnoredContent
         | false -> None
     | _ -> None
@@ -81,47 +59,44 @@ let mapVoucherContent (transactions : SieRecord list) =
     |> filter (not << isIgnoredContent)
 
 let voucher = function
-    | Base { Tag = VER; Values = values; Children = children }
-        -> mapVoucherContent children
+    | Base { Tag = VER; Values = values; Children = children } ->
+        children
+        |> mapVoucherContent 
         |> createVerification values
-        |> map Ver
-        |> map Sie
+        |> map (Ver >> Sie)
     | _ -> None
     
 let account = function
-    | Base { Tag = KONTO; Values = values }
-     -> match values |> plainValues with
-        | account::name::_ -> Some <| Konto { Code = account; Name = name } |> map Sie
+    | Base { Tag = KONTO; Values = values } ->
+        match values |> plainValues with
+        | account::name::_ ->
+            Some <| (Sie <| Konto { Code = account; Name = name })
         | _ -> None
     | _ -> None
     
 let private createBalance (values : SieValue list) =
     match values |> plainValues with
-        | TryInt year
-          ::account
-          ::TryDecimal balance
-          ::_ -> Some { YearIndex = year; Account = account; Balance = balance }
+        | Int year::account::InvariantDecimal balance::_ ->
+            Some { YearIndex = year; Account = account; Balance = balance }
         | _ -> None
     
 let openingBalance = function
-    | Base { Tag = IB; Values = values } -> createBalance values |> map Ib |> map Sie
+    | Base { Tag = IB; Values = values } -> createBalance values |> map (Ib >> Sie)
     | _ -> None
     
 let closingBalance = function
-    | Base { Tag = UB; Values = values } -> createBalance values |> map Ub |> map Sie
+    | Base { Tag = UB; Values = values } -> createBalance values |> map (Ub >> Sie)
     | _ -> None
     
 let resultAccount = function
-    | Base { Tag = RES; Values = values } -> createBalance values |> map Res |> map Sie
+    | Base { Tag = RES; Values = values } -> createBalance values |> map (Res >> Sie)
     | _ -> None
     
 let financialYear = function
-    | Base { Tag = RAR; Values = values }
-     -> match values |> plainValues with
-        | TryInt year
-          ::TryDate start
-          ::TryDate finish
-          ::_ -> Some <| Rar { YearIndex = year; Start = start; End = finish } |> map Sie
+    | Base { Tag = RAR; Values = values } ->
+        match values |> plainValues with
+        | Int year::CompactDate start::CompactDate finish::_ ->
+            Some <| (Sie <| Rar { YearIndex = year; Start = start; End = finish })
         | _ -> None
     | _ -> None
     
@@ -153,5 +128,5 @@ open SieDocumentBuilder
 let document sie =
     sie
     |> map (choose all <|>% Unknown)
-    |> List.fold consume create
+    |> List.fold consume (create ())
     |> build

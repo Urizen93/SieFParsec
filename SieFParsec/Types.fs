@@ -4,7 +4,7 @@ module FParsecPlayground.Types
 open System
 open FParsecPlayground.SieParser.Types
 open FSharpPlus
-open FSharpPlus.Data
+open FSharpx.Option
 
 type Transaction = {
     Account : string
@@ -66,9 +66,9 @@ type Company = {
     Name : string
 }
 
-let createCompany id name : Company option = monad {
+let createCompany id name = maybe {
     let! id = id
-    let name = name |> Option.defaultValue id
+    let name = name |> getOrElse id
     return { ID = id; Name = name }
 }
 
