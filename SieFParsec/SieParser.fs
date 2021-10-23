@@ -18,7 +18,7 @@ module Types =
         
     type SieRecord =
         | Base of SieBase
-        | NonParsed of string
+        | NonParsed of Position * string
         
     and SieBase = {
         Tag : string
@@ -68,9 +68,9 @@ module private Parsers =
         str.Trim()
         
     let nonParsed =
-        many1CharsTill anyChar (lookAhead hashtag <|> eof)
-        |>> trim
-
+        getPosition
+        .>>. (many1CharsTill anyChar (lookAhead hashtag <|> eof) |>> trim)
+        
     let sieRecord = %[
         attempt sieBase |>> Base
         nonParsed |>> NonParsed]
@@ -79,18 +79,17 @@ module private Parsers =
         (sieRecord .>> skipTillNonSpace)
         |> manyBetween (spaces >>. curlyOpen .>> spaces) curlyClose
         
-    do sieBaseRef :=
-        parse {
-            let! tag = tag
-            
-            let! values =
-                (sieValue .>> lineSpaces)
-                |> manyBetween lineSpaces eol
-            
-            let! children = (attempt children) <|>% list.Empty
-            
-            return { Tag = tag; Values = values; Children = children }
-        }
+    do sieBaseRef := parse {
+        let! tag = tag
+        
+        let! values =
+            (sieValue .>> lineSpaces)
+            |> manyBetween lineSpaces eol
+        
+        let! children = (attempt children) <|>% list.Empty
+        
+        return { Tag = tag; Values = values; Children = children }
+    }
 
     let sieParser =
         sepEndBy sieRecord skipTillNonSpace
